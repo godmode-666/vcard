@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vCard Generator</title>
+<style>
+  /* Deliberately retro: late-1990s personal homepage / desktop utility */
+  body {
+    margin: 0;
+    padding: 18px 10px 30px;
+    background: #c0c0c0;
+    color: #550000;
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: bold;
+  }
+  .page { max-width: 700px; margin: 0 auto; }
+  .maker {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin: 0 auto 12px; font-size: 14px; color: #550000;
+  }
+  .maker-image {
+    width: 64px; height: 64px; object-fit: cover;
+    border: 2px ridge #fff; background: #fff; flex: 0 0 auto;
+  }
+  .window {
+    border: 3px outset #fff;
+    background: #d4d0c8;
+    padding: 4px;
+    box-shadow: 4px 4px 0 #808080;
+  }
+  .titlebar {
+    background: #550000;
+    color: white;
+    padding: 7px 9px;
+    font-size: 18px;
+    letter-spacing: .2px;
+  }
+  .inside { padding: 16px 15px 13px; }
+  h1 {
+    margin: 0 0 5px; color: #550000; font-size: 29px;
+    text-align: center; text-decoration: underline;
+  }
+  .subtitle { text-align: center; margin: 0 0 18px; font-size: 16px; }
+  hr { border: 0; border-top: 2px groove #fff; margin: 12px 0 17px; }
+  form { display: grid; gap: 12px; }
+  label { display: grid; gap: 4px; color: #550000; font-size: 15px; }
+  input, select {
+    width: 100%; box-sizing: border-box; padding: 7px 8px;
+    border: 2px inset #fff; border-radius: 0; background: white;
+    color: #000; font: 16px Arial, sans-serif; font-weight: normal;
+  }
+  input:focus, select:focus { outline: 1px dotted #550000; }
+  .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 5px; }
+  button {
+    border: 3px outset #fff; border-radius: 0; padding: 8px 12px;
+    background: #d4d0c8; color: #550000;
+    font: bold 14px Georgia, "Times New Roman", serif; cursor: pointer;
+  }
+  button:active:not(:disabled) { border-style: inset; }
+  button:disabled { color: #550000; cursor: not-allowed; }
+  #result { text-align: center; margin-top: 17px; }
+  #qrPreview {
+    display: inline-block; background: white; padding: 8px;
+    border: 3px inset #fff; max-width: 100%;
+  }
+  #qrPreview:empty { display: none; }
+  #qrPreview canvas, #qrPreview img { display: block; max-width: 100%; height: auto !important; }
+  #status { min-height: 18px; color: #550000; font-size: 14px; }
+  .footer { text-align: center; color: #550000; font-size: 12px; margin-top: 12px; }
+  a { color: #550000; }
+  @media (max-width: 480px) {
+    .inside { padding: 12px 9px; }
+    h1 { font-size: 25px; }
+    .actions { display: grid; }
+    button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="maker">
+    <img class="maker-image" src="PP.jpeg" alt="Creator image">
+    <span>Made By: God Mode</span>
+  </div>
+
+  <div class="window">
+    <div class="titlebar">vCard Generator</div>
+    <div class="inside">
+      <h1>vCard Generator</h1>
+      <p class="subtitle">Enter Details</p>
+      <hr>
+      <form id="vcardForm">
+        <label>1. First Name
+          <input id="firstName" autocomplete="given-name" placeholder="Jane">
+        </label>
+        <label>2. Last Name
+          <input id="lastName" autocomplete="family-name" placeholder="Doe">
+        </label>
+        <label>3. Phone Number
+          <input id="phone" type="tel" autocomplete="tel" placeholder="+91 98765 43210">
+        </label>
+        <label>4. Email
+          <input id="email" type="email" autocomplete="email" placeholder="jane@example.com">
+        </label>
+        <label>Error Correction Level
+          <select id="errorLevel">
+            <option value="1">Level1</option>
+            <option value="2">Level2</option>
+            <option value="3" selected>Level3</option>
+            <option value="4">Level4</option>
+          </select>
+        </label>
+        <div class="actions">
+          <button type="submit">Generate QR Code</button>
+          <button type="button" id="downloadBtn" disabled>Download 3000 × 3000 PNG</button>
+        </div>
+      </form>
+      <hr>
+      <div id="result" aria-live="polite">
+        <div id="qrPreview"></div>
+        <p id="status">Your QR code will appear here.</p>
+      </div>
+    </div>
+  </div>
+  <div class="footer">Best viewed in a browser &nbsp;|&nbsp; vCard Generator</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  const form = document.getElementById('vcardForm');
+  const preview = document.getElementById('qrPreview');
+  const statusText = document.getElementById('status');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  const correctionMap = {
+    '1': QRCode.CorrectLevel.L,
+    '2': QRCode.CorrectLevel.M,
+    '3': QRCode.CorrectLevel.Q,
+    '4': QRCode.CorrectLevel.H
+  };
+
+  function escapeVCard(value) {
+    return value.trim().replace(/\\/g, '\\\\').replace(/\r\n|\n|\r/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
+  }
+  function buildVCard() {
+    const first = document.getElementById('firstName').value;
+    const last = document.getElementById('lastName').value;
+    const phone = document.getElementById('phone').value;
+    const email = document.getElementById('email').value;
+    const lines = [
+      'BEGIN:VCARD', 'VERSION:3.0',
+      `N:${escapeVCard(last)};${escapeVCard(first)};;;`,
+      `FN:${escapeVCard([first, last].filter(Boolean).join(' '))}`
+    ];
+    if (phone.trim()) lines.push(`TEL;TYPE=CELL:${escapeVCard(phone)}`);
+    if (email.trim()) lines.push(`EMAIL;TYPE=INTERNET:${escapeVCard(email)}`);
+    lines.push('END:VCARD');
+    return lines.join('\r\n');
+  }
+
+  form.addEventListener('submit', function(event) {
+    event.preventDefault();
+    if (typeof QRCode === 'undefined') {
+      statusText.textContent = 'Could not load the QR library. Check your internet connection and reload.';
+      return;
+    }
+    if (![...form.querySelectorAll('input')].some(input => input.value.trim())) {
+      statusText.textContent = 'Please enter at least one contact detail.';
+      return;
+    }
+    preview.innerHTML = '';
+    try {
+      new QRCode(preview, {
+        text: buildVCard(), width: 512, height: 512,
+        correctLevel: correctionMap[document.getElementById('errorLevel').value]
+      });
+      downloadBtn.disabled = false;
+      statusText.textContent = 'QR code ready. Scan it to save the contact.';
+    } catch (error) {
+      downloadBtn.disabled = true;
+      statusText.textContent = 'Could not generate this QR code. Try shorter contact details.';
+    }
+  });
+
+  downloadBtn.addEventListener('click', function() {
+    const source = preview.querySelector('canvas');
+    const img = preview.querySelector('img');
+    let sourceCanvas = source;
+    if (!sourceCanvas && img) {
+      sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = img.naturalWidth || 512;
+      sourceCanvas.height = img.naturalHeight || 512;
+      sourceCanvas.getContext('2d').drawImage(img, 0, 0);
+    }
+    if (!sourceCanvas) { statusText.textContent = 'Generate a QR code first.'; return; }
+    const output = document.createElement('canvas');
+    output.width = 3000; output.height = 3000;
+    const ctx = output.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 3000, 3000);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sourceCanvas, 150, 150, 2700, 2700);
+    output.toBlob(function(blob) {
+      if (!blob) { statusText.textContent = 'Could not create the PNG. Please try again.'; return; }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = 'vcard-qr-3000x3000.png'; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      statusText.textContent = 'Downloaded vcard-qr-3000x3000.png';
+    }, 'image/png');
+  });
+</script>
+</body>
+</html>
